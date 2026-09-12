@@ -11,7 +11,7 @@ Bu fayl status lövhəsidir, changelog deyil (dəyişikliklərin tarixçəsi ü�
 | Ledger | Tətbiq olundu (income/expense/transfer/adjust) | `@nestjs/cqrs`, `events`+`ledger_entries`+`account_balances`. `account_balances` reconciliation job hələ yoxdur |
 | Categories | Tətbiq olundu (minimal) | CRUD + 8 sistem default kateqoriyası (`prisma/seed.ts`, `pnpm db:seed`). İyerarxiya/AI-təklif UI-si yoxdur |
 | Currency & FX | Tətbiq olundu (minimal) | `POST/GET /fx-rates` əl ilə kurs daxiletmə + tərs-kurs fallback-ı. Xarici mənbədən gündəlik avtomatik yenilənmə (cron) hələ yoxdur |
-| Net Worth & Reporting | Başlanmayıb | |
+| Net Worth & Reporting | Tətbiq olundu (minimal) | `GET /net-worth`, `/timeline`, `/category-summary` — öz cədvəli yoxdur, `ledger_entries`+`fx_rates` üzərində agregasiya (bax `docs/decisions/0011-net-worth-fx-strategy.md`) |
 | Budget & Rules (yalnız şablonlar) | Başlanmayıb | |
 | Goals (statik məbləğ) | Başlanmayıb | |
 | AI Assistant (chat client) | Başlanmayıb | |
@@ -29,12 +29,16 @@ Bu fayl status lövhəsidir, changelog deyil (dəyişikliklərin tarixçəsi ü�
 - [ ] `account_balances`-in `events`-dən reconciliation (yenidən qurma) job-u
 - [ ] Currency & FX: xarici mənbədən gündəlik avtomatik kurs yeniləmə (cron) — indi əl ilədir
 - [ ] Categories: iyerarxiya UI-si, AI avtomatik-kateqoriyalaşdırma təklifi
-- [ ] Net Worth & Reporting-i tətbiq et (Ledger + Currency & FX artıq hazırdır)
+- [x] Net Worth & Reporting-i tətbiq et (bax `docs/decisions/0011-net-worth-fx-strategy.md`)
+- [ ] Net Worth: böyük tarix aralıqlı timeline sorğuları üçün performans (materialized view/snapshot cədvəli)
+- [ ] Budget & Rules-u tətbiq et (2-3 hardcoded şablon)
+- [ ] Goals-u tətbiq et (statik hədəf məbləği)
 
 ## Log
 
 *(ən yenisi əvvəldə — sessiya/qərar başına bir sətir, aidiyyatı olan ADR-ə keçid ver)*
 
+- Net Worth & Reporting tətbiq olundu: `GET /net-worth` (cari/`asOf`), `/net-worth/timeline` (gün/həftə/ay, max 366 nöqtə), `/net-worth/category-summary` (dövr üzrə). Net worth canlı (tarixli) FX kursu ilə, kateqoriya hesabatı donmuş `fx_rate_to_base` ilə hesablanır; arxivlənmiş hesablar daxildir (bax `docs/decisions/0011-net-worth-fx-strategy.md`). 27 e2e test (7 fayl) yaşıl.
 - Accounts + Ledger + minimal Categories/Currency & FX tətbiq olundu: `@nestjs/cqrs` ilə `OpenAccount`/`ArchiveAccount`/`RecordIncome`/`RecordExpense`/`TransferBetweenAccounts`/`AdjustBalance` command-ları, `events`+`ledger_entries`+`account_balances` (hesabın öz valyutasında), FX axtarışı (eyni-valyuta qısayolu + tərs-kurs fallback-ı, tapılmasa aydın xəta), 8 sistem default kateqoriyası seed edildi (bax `docs/decisions/0010-ledger-command-layer.md`). 22 e2e test (6 fayl) yaşıl.
 - Identity & Access tətbiq olundu: `POST /auth/register`, `POST /auth/login`, `POST /auth/logout`, `GET /auth/me`; opaque + SHA-256 hash-lənmiş sessiya token-ləri, `bcryptjs` ilə parol hashing, `SessionAuthGuard` (bax `docs/decisions/0009-identity-auth-strategy.md`). Parol sıfırlama və hesab deaktivasiyası bilərəkdən kənarda saxlanıldı.
 - NestJS layihəsi scaffold edildi (Nest 12, ESM, `pnpm`), Prisma 7 (driver adapter — `@prisma/adapter-pg`) və `@nestjs/swagger` quruldu; `prisma/schema.prisma`-da Identity & Access + Accounts cədvəlləri yazıldı və `financeos_dev`-ə migrate edildi; 8 modul üçün boş skeleton yaradıldı (bax `docs/decisions/0008-module-folder-naming.md`). Server boot və Swagger UI (`/api`) yoxlanıldı.
