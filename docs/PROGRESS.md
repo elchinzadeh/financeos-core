@@ -6,9 +6,9 @@ Bu fayl status lövhəsidir, changelog deyil (dəyişikliklərin tarixçəsi ü�
 
 | Modul | Status | Qeyd |
 |---|---|---|
-| Identity & Access | Tətbiq olundu (register/login/logout/me) | `src/modules/identity/` — `SessionAuthGuard`, opaque hash-lənmiş sessiya token-i (bax `docs/decisions/0009-identity-auth-strategy.md`). Parol sıfırlama və hesab deaktivasiyası hələ yoxdur |
+| Identity & Access | Tətbiq olundu (register/login/logout/me/deactivate/delete-data) | `src/modules/identity/` — `SessionAuthGuard`, opaque hash-lənmiş sessiya token-i (bax `docs/decisions/0009-identity-auth-strategy.md`). Deaktivasiya/data silinməsi bax `docs/decisions/0013-account-deactivation-and-reconciliation.md`. Parol sıfırlama hələ yoxdur (email provider tələb edir) |
 | Accounts | Tətbiq olundu (open/list/get/archive) | Event-sourced (`OpenAccount`/`ArchiveAccount` command-ları, bax `docs/decisions/0010-ledger-command-layer.md`) |
-| Ledger | Tətbiq olundu (income/expense/transfer/adjust) | `@nestjs/cqrs`, `events`+`ledger_entries`+`account_balances`. `account_balances` reconciliation job hələ yoxdur |
+| Ledger | Tətbiq olundu (income/expense/transfer/adjust/reconcile) | `@nestjs/cqrs`, `events`+`ledger_entries`+`account_balances`. `POST /ledger/reconcile` balans cache-ini yenidən qurur (bax `docs/decisions/0013-account-deactivation-and-reconciliation.md`) |
 | Categories | Tətbiq olundu (minimal) | CRUD + 8 sistem default kateqoriyası (`prisma/seed.ts`, `pnpm db:seed`). İyerarxiya/AI-təklif UI-si yoxdur |
 | Currency & FX | Tətbiq olundu (minimal) | `POST/GET /fx-rates` əl ilə kurs daxiletmə + tərs-kurs fallback-ı. Xarici mənbədən gündəlik avtomatik yenilənmə (cron) hələ yoxdur |
 | Net Worth & Reporting | Tətbiq olundu (minimal) | `GET /net-worth`, `/timeline`, `/category-summary` — öz cədvəli yoxdur, `ledger_entries`+`fx_rates` üzərində agregasiya (bax `docs/decisions/0011-net-worth-fx-strategy.md`) |
@@ -24,10 +24,10 @@ Bu fayl status lövhəsidir, changelog deyil (dəyişikliklərin tarixçəsi ü�
 - [ ] Mobil/veb frontend seçimini müəyyənləşdir
 - [x] Identity & Access-i tətbiq et (bax `docs/decisions/0009-identity-auth-strategy.md`)
 - [x] Accounts + Ledger-i birgə tətbiq et (minimal Categories + Currency & FX daxil, bax `docs/decisions/0010-ledger-command-layer.md`)
-- [ ] Parol sıfırlama axını (email göndərmə infrastrukturu tələb edir — hələ yoxdur)
-- [ ] Hesab deaktivasiyası / məlumatların silinməsi (GDPR-tipli, diqqətli dizayn tələb edir)
-- [ ] `account_balances`-in `events`-dən reconciliation (yenidən qurma) job-u
-- [ ] Currency & FX: xarici mənbədən gündəlik avtomatik kurs yeniləmə (cron) — indi əl ilədir
+- [ ] Parol sıfırlama axını — **bloklanıb**: email göndərmə üçün provider (SMTP/SendGrid və s.) + credential lazımdır, istifadəçidən təmin edilməlidir
+- [x] Hesab deaktivasiyası / məlumatların silinməsi (bax `docs/decisions/0013-account-deactivation-and-reconciliation.md`)
+- [x] `account_balances`-in `events`-dən reconciliation (yenidən qurma) job-u (`POST /ledger/reconcile`)
+- [ ] Currency & FX: xarici mənbədən gündəlik avtomatik kurs yeniləmə (cron) — **bloklanıb**: real FX API (məs. exchangerate.host, Fixer) açarı lazımdır, istifadəçidən təmin edilməlidir; indi əl ilədir
 - [ ] Categories: iyerarxiya UI-si, AI avtomatik-kateqoriyalaşdırma təklifi
 - [x] Net Worth & Reporting-i tətbiq et (bax `docs/decisions/0011-net-worth-fx-strategy.md`)
 - [ ] Net Worth: böyük tarix aralıqlı timeline sorğuları üçün performans (materialized view/snapshot cədvəli)
@@ -41,6 +41,7 @@ Bu fayl status lövhəsidir, changelog deyil (dəyişikliklərin tarixçəsi ü�
 
 *(ən yenisi əvvəldə — sessiya/qərar başına bir sətir, aidiyyatı olan ADR-ə keçid ver)*
 
+- Hesab deaktivasiyası/data silinməsi və balans reconciliation tətbiq olundu: `POST /auth/deactivate` (parol təsdiqi, bütün sessiyaları ləğv edir, login-i bloklayır), `POST /auth/delete-data` (parol təsdiqi, bütün user-scoped sətirləri — `events` daxil — geri dönməz silir, ADR-0001-in "events silinmir" qaydasını GDPR üçün bilərəkdən pozur), `POST /ledger/reconcile` (`account_balances`-i `ledger_entries`-dən yenidən hesablayır, event yaratmır). Parol sıfırlama və FX cron xarici provider/API açarı tələb etdiyi üçün bloklanmış olaraq qalır (bax `docs/decisions/0013-account-deactivation-and-reconciliation.md`). 39 e2e test (10 fayl) yaşıl.
 - Budget & Rules tətbiq olundu: `GET /budgets/templates` (2 hardcoded — `50/30/20`, `70/20/10`), `POST /budgets`, `GET /budgets`, `GET /budgets/:id`, `GET /budgets/:id/check`, `/priority`, `/deactivate`. `budgets` protected cədvəl — event-sourced (`CreateBudget`/`UpdateBudgetPriority`/`DeactivateBudget`). `percent` dövr gəlirinin faizidir (istifadəçi ilə təsdiqləndi), allocation-lar yalnız expense-kateqoriyalara ola bilər (bax `docs/decisions/0012-budget-rules.md`). 34 e2e test (9 fayl) yaşıl.
 - Goals tətbiq olundu: `POST /goals`, `GET /goals`, `GET /goals/:id`, `/complete`, `/abandon`. `goals` protected cədvəl olduğu üçün (Accounts-dakı kimi) event-sourced — `CreateGoal`/`CompleteGoal`/`AbandonGoal` command-ları. Tərəqqi ayrıca saxlanmır, `linkedAccountId`-in balansı canlı FX kursu ilə `targetCurrency`-ə çevrilərək sorğu zamanı hesablanır (Net Worth-dakı eyni "stok" məntiqi, bax `docs/decisions/0011-net-worth-fx-strategy.md`). 31 e2e test (8 fayl) yaşıl.
 - Net Worth & Reporting tətbiq olundu: `GET /net-worth` (cari/`asOf`), `/net-worth/timeline` (gün/həftə/ay, max 366 nöqtə), `/net-worth/category-summary` (dövr üzrə). Net worth canlı (tarixli) FX kursu ilə, kateqoriya hesabatı donmuş `fx_rate_to_base` ilə hesablanır; arxivlənmiş hesablar daxildir (bax `docs/decisions/0011-net-worth-fx-strategy.md`). 27 e2e test (7 fayl) yaşıl.

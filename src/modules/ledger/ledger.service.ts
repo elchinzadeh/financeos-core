@@ -1,5 +1,6 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, NotFoundException } from '@nestjs/common';
 import { CommandBus } from '@nestjs/cqrs';
+import { Prisma } from '../../generated/prisma/client.js';
 import { PrismaService } from '../../prisma/prisma.service.js';
 import { AdjustBalanceCommand } from './commands/adjust-balance.command.js';
 import { RecordExpenseCommand } from './commands/record-expense.command.js';
@@ -70,5 +71,59 @@ export class LedgerService {
       where: { account: { userId }, ...(accountId ? { accountId } : {}) },
       orderBy: { occurredAt: 'desc' },
     });
+  }
+
+  /**
+   * `account_balances`-i `ledger_entries`-dən yenidən hesablayır (ADR-0001/0002-nin
+   * "cache həmişə yenidən qurula bilməlidir" prinsipi). Event yaratmır — mövcud faktlardan
+   * mövcud cache-i düzəldir, yeni maliyyə hadisəsi deyil.
+   */
+  async reconcile(userId: string, accountId?: string) {
+    const accounts = accountId
+      ? [await this.getOwnedAccount(userId, accountId)]
+      : await this.prisma.account.findMany({ where: { userId } });
+
+    const results = [];
+    for (const account of accounts) {
+      const [creditSum, debitSum] = await Promise.all([
+        this.prisma.ledgerEntry.aggregate({
+          where: { accountId: account.id, direction: 'credit' },
+          _sum: { amount: true },
+        }),
+        this.prisma.ledgerEntry.aggregate({
+          where: { accountId: account.id, direction: 'debit' },
+          _sum: { amount: true },
+        }),
+      ]);
+      const newBalance = (creditSum._sum.amount ?? new Prisma.Decimal(0)).sub(
+        debitSum._sum.amount ?? new Prisma.Decimal(0),
+      );
+      const existing = await this.prisma.accountBalance.findUnique({
+        where: { accountId: account.id },
+      });
+      const previousBalance = existing?.balance ?? new Prisma.Decimal(0);
+
+      await this.prisma.accountBalance.upsert({
+        where: { accountId: account.id },
+        create: { accountId: account.id, balance: newBalance, updatedAt: new Date() },
+        update: { balance: newBalance, updatedAt: new Date() },
+      });
+
+      results.push({
+        accountId: account.id,
+        previousBalance: previousBalance.toString(),
+        newBalance: newBalance.toString(),
+        corrected: !previousBalance.equals(newBalance),
+      });
+    }
+    return results;
+  }
+
+  private async getOwnedAccount(userId: string, accountId: string) {
+    const account = await this.prisma.account.findUnique({ where: { id: accountId } });
+    if (!account || account.userId !== userId) {
+      throw new NotFoundException('Hesab tapılmadı');
+    }
+    return account;
   }
 }

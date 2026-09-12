@@ -193,4 +193,54 @@ describe('Ledger (e2e)', () => {
     const entry = await prisma.ledgerEntry.findUniqueOrThrow({ where: { id: income.body.id } });
     expect(entry.fxRateToBase.toNumber()).toBeCloseTo(1.7);
   });
+
+  it('reconciles a corrupted balance cache back to the ledger_entries sum', async () => {
+    const accountId = await openAccount('Reconcile testi', 'cash', 'AZN');
+
+    await request(app.getHttpServer())
+      .post('/ledger/record-income')
+      .set('Authorization', auth())
+      .send({ accountId, amount: '300.00' })
+      .expect(201);
+    await request(app.getHttpServer())
+      .post('/ledger/record-expense')
+      .set('Authorization', auth())
+      .send({ accountId, amount: '50.00' })
+      .expect(201);
+
+    // Cache-i qəsdən korlayırıq (real balans 250 olmalıdır).
+    await prisma.accountBalance.update({
+      where: { accountId },
+      data: { balance: '999999' },
+    });
+    expect(await getBalance(accountId)).toBeCloseTo(999999);
+
+    const result = await request(app.getHttpServer())
+      .post('/ledger/reconcile')
+      .set('Authorization', auth())
+      .send({ accountId })
+      .expect(201);
+
+    expect(result.body).toHaveLength(1);
+    expect(Number(result.body[0].newBalance)).toBeCloseTo(250);
+    expect(result.body[0].corrected).toBe(true);
+    expect(await getBalance(accountId)).toBeCloseTo(250);
+  });
+
+  it('rejects reconciling an account that does not belong to the caller', async () => {
+    const other = await registerAndLogin(app, { baseCurrency: 'AZN' });
+    const otherAccount = await request(app.getHttpServer())
+      .post('/accounts')
+      .set('Authorization', bearer(other.accessToken))
+      .send({ name: 'Başqasının hesabı', type: 'cash', currency: 'AZN' })
+      .expect(201);
+
+    await request(app.getHttpServer())
+      .post('/ledger/reconcile')
+      .set('Authorization', auth())
+      .send({ accountId: otherAccount.body.id })
+      .expect(404);
+
+    await cleanupTestUser(prisma, other.email);
+  });
 });

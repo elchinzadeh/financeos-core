@@ -75,6 +75,9 @@ export class IdentityService {
     if (!passwordMatches) {
       throw new UnauthorizedException(INVALID_CREDENTIALS_MESSAGE);
     }
+    if (user.deactivatedAt) {
+      throw new UnauthorizedException('Hesab deaktivdir');
+    }
 
     const rawToken = generateToken();
     const tokenHash = hashToken(rawToken);
@@ -114,6 +117,51 @@ export class IdentityService {
 
   async logout(sessionId: string): Promise<void> {
     await this.prisma.session.deleteMany({ where: { id: sessionId } });
+  }
+
+  /** İstifadəçini deaktiv edir: gələcək login-lər rədd olunur, bütün sessiyalar ləğv olunur. */
+  async deactivate(userId: string, password: string): Promise<void> {
+    await this.verifyPassword(userId, password);
+
+    await this.prisma.$transaction(async (tx) => {
+      await tx.user.update({ where: { id: userId }, data: { deactivatedAt: new Date() } });
+      const clients = await tx.client.findMany({ where: { userId } });
+      await tx.session.deleteMany({ where: { clientId: { in: clients.map((c) => c.id) } } });
+    });
+  }
+
+  /**
+   * GDPR-tipli tam silinmə: istifadəçiyə aid bütün sətirlər (events daxil) geri dönməz
+   * şəkildə silinir — bax docs/decisions/0013-account-deactivation-and-reconciliation.md.
+   */
+  async deleteAllData(userId: string, password: string): Promise<void> {
+    await this.verifyPassword(userId, password);
+
+    await this.prisma.$transaction(async (tx) => {
+      const accounts = await tx.account.findMany({ where: { userId } });
+      const accountIds = accounts.map((a) => a.id);
+
+      await tx.ledgerEntry.deleteMany({ where: { accountId: { in: accountIds } } });
+      await tx.accountBalance.deleteMany({ where: { accountId: { in: accountIds } } });
+      await tx.goal.deleteMany({ where: { userId } });
+      await tx.budget.deleteMany({ where: { userId } });
+      await tx.event.deleteMany({ where: { userId } });
+      await tx.account.deleteMany({ where: { userId } });
+      await tx.category.deleteMany({ where: { userId } });
+
+      const clients = await tx.client.findMany({ where: { userId } });
+      await tx.session.deleteMany({ where: { clientId: { in: clients.map((c) => c.id) } } });
+      await tx.client.deleteMany({ where: { userId } });
+      await tx.user.delete({ where: { id: userId } });
+    });
+  }
+
+  private async verifyPassword(userId: string, password: string): Promise<void> {
+    const user = await this.prisma.user.findUniqueOrThrow({ where: { id: userId } });
+    const matches = await bcrypt.compare(password, user.passwordHash);
+    if (!matches) {
+      throw new UnauthorizedException('Parol yanlışdır');
+    }
   }
 
   async validateSession(rawToken: string): Promise<SessionContext | null> {

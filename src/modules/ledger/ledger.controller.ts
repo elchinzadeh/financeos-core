@@ -4,6 +4,8 @@ import { SessionAuthGuard } from '../identity/guards/session-auth.guard.js';
 import type { AuthenticatedRequest } from '../identity/identity.types.js';
 import { AdjustBalanceDto } from './dto/adjust-balance.dto.js';
 import { LedgerEntryResponseDto } from './dto/ledger-entry-response.dto.js';
+import { ReconcileDto } from './dto/reconcile.dto.js';
+import { ReconcileResultDto } from './dto/reconcile-response.dto.js';
 import { RecordExpenseDto } from './dto/record-expense.dto.js';
 import { RecordIncomeDto } from './dto/record-income.dto.js';
 import { TransferDto } from './dto/transfer.dto.js';
@@ -49,5 +51,14 @@ export class LedgerController {
   @ApiResponse({ status: HttpStatus.OK, type: [LedgerEntryResponseDto] })
   async listEntries(@Req() request: AuthenticatedRequest, @Query('accountId') accountId?: string) {
     return this.ledgerService.listEntries(request.user.id, accountId);
+  }
+
+  @Post('reconcile')
+  @ApiOperation({
+    summary: 'account_balances cache-ini ledger_entries-dən yenidən hesabla',
+  })
+  @ApiResponse({ status: HttpStatus.CREATED, type: [ReconcileResultDto] })
+  async reconcile(@Req() request: AuthenticatedRequest, @Body() dto: ReconcileDto) {
+    return this.ledgerService.reconcile(request.user.id, dto.accountId);
   }
 }

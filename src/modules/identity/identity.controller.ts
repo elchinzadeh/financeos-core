@@ -11,6 +11,7 @@ import {
 import { ApiBearerAuth, ApiOperation, ApiResponse, ApiTags } from '@nestjs/swagger';
 import { CurrentUser } from './decorators/current-user.decorator.js';
 import { AuthResponseDto } from './dto/auth-response.dto.js';
+import { ConfirmPasswordDto } from './dto/confirm-password.dto.js';
 import { LoginDto } from './dto/login.dto.js';
 import { MeResponseDto } from './dto/me-response.dto.js';
 import { RegisterDto } from './dto/register.dto.js';
@@ -58,5 +59,31 @@ export class IdentityController {
     @Req() request: AuthenticatedRequest,
   ): Promise<MeResponseDto> {
     return { user, client: request.client };
+  }
+
+  @Post('deactivate')
+  @HttpCode(HttpStatus.OK)
+  @UseGuards(SessionAuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Hesabı deaktiv et (bütün sessiyalar ləğv olunur, login bloklanır)' })
+  async deactivate(
+    @Req() request: AuthenticatedRequest,
+    @Body() dto: ConfirmPasswordDto,
+  ): Promise<{ ok: true }> {
+    await this.identityService.deactivate(request.user.id, dto.password);
+    return { ok: true };
+  }
+
+  @Post('delete-data')
+  @HttpCode(HttpStatus.OK)
+  @UseGuards(SessionAuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Bütün datanı geri dönməz şəkildə sil (GDPR)' })
+  async deleteData(
+    @Req() request: AuthenticatedRequest,
+    @Body() dto: ConfirmPasswordDto,
+  ): Promise<{ ok: true }> {
+    await this.identityService.deleteAllData(request.user.id, dto.password);
+    return { ok: true };
   }
 }
