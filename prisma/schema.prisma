@@ -1,0 +1,95 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+// Get a free hosted Postgres database in seconds: `npx create-db`
+
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+// --- Identity & Access (docs/MODULES.md §1) ---
+
+enum ClientType {
+  mobile
+  web
+  ai_chat
+  api
+  mcp
+}
+
+model User {
+  id           String   @id @default(uuid()) @db.Uuid
+  email        String   @unique
+  passwordHash String   @map("password_hash")
+  baseCurrency String   @map("base_currency") @db.Char(3)
+  locale       String
+  createdAt    DateTime @default(now()) @map("created_at")
+
+  clients  Client[]
+  accounts Account[]
+
+  @@map("users")
+}
+
+model Client {
+  id        String     @id @default(uuid()) @db.Uuid
+  userId    String     @map("user_id") @db.Uuid
+  type      ClientType
+  name      String
+  scopes    Json
+  createdAt DateTime   @default(now()) @map("created_at")
+  revokedAt DateTime?  @map("revoked_at")
+
+  user     User      @relation(fields: [userId], references: [id])
+  sessions Session[]
+
+  @@map("clients")
+}
+
+model Session {
+  id        String   @id @default(uuid()) @db.Uuid
+  clientId  String   @map("client_id") @db.Uuid
+  tokenHash String   @map("token_hash")
+  expiresAt DateTime @map("expires_at")
+
+  client Client @relation(fields: [clientId], references: [id])
+
+  @@map("sessions")
+}
+
+// --- Accounts (docs/MODULES.md §2) ---
+
+enum AccountType {
+  cash
+  bank
+  card
+  savings
+  loan
+  e_wallet
+  investment
+}
+
+enum AccountGroup {
+  personal
+  freelance_business
+}
+
+model Account {
+  id           String        @id @default(uuid()) @db.Uuid
+  userId       String        @map("user_id") @db.Uuid
+  name         String
+  type         AccountType
+  currency     String        @db.Char(3)
+  accountGroup AccountGroup? @map("account_group")
+  isActive     Boolean       @default(true) @map("is_active")
+  createdAt    DateTime      @default(now()) @map("created_at")
+
+  user User @relation(fields: [userId], references: [id])
+
+  @@map("accounts")
+}

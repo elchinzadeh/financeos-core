@@ -8,7 +8,7 @@
 
 ## Komandalar
 
-NestJS-in default test runner-i Jest-dir, paket meneceri pnpm:
+NestJS-in bu layihədəki scaffold-u Vitest istifadə edir (Jest yox — `nest new` bu versiyada default olaraq Vitest qurur), paket meneceri pnpm:
 
 - Unit testlər: `pnpm test`
 - E2E testlər: `pnpm test:e2e`
