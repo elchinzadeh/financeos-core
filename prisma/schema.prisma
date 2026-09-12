@@ -35,6 +35,7 @@ model User {
   categories Category[]
   events     Event[]
   goals      Goal[]
+  budgets    Budget[]
 
   @@map("users")
 }
@@ -222,4 +223,26 @@ model Goal {
   linkedAccount Account? @relation(fields: [linkedAccountId], references: [id])
 
   @@map("goals")
+}
+
+// --- Budget & Rules (docs/MODULES.md §7) ---
+
+enum BudgetSource {
+  template
+  custom
+}
+
+model Budget {
+  id         String       @id @default(uuid()) @db.Uuid
+  userId     String       @map("user_id") @db.Uuid
+  name       String
+  source     BudgetSource
+  definition Json
+  priority   Int
+  activeFrom DateTime     @map("active_from") @db.Date
+  activeTo   DateTime?    @map("active_to") @db.Date
+
+  user User @relation(fields: [userId], references: [id])
+
+  @@map("budgets")
 }
