@@ -21,7 +21,7 @@ Bu fayl status lövhəsidir, changelog deyil (dəyişikliklərin tarixçəsi ü�
 - [x] Backend stack seçildi: NestJS + PostgreSQL + Prisma, `@nestjs/cqrs` (bax `docs/decisions/0006-backend-stack.md`)
 - [x] Repo strukturu, API üslubu, paket meneceri seçildi: tək repo, REST+OpenAPI, pnpm (bax `docs/decisions/0007-repo-api-tooling.md`)
 - [x] `pnpm` ilə NestJS layihəsini scaffold et, Prisma + Swagger modullarını qur (bax `docs/decisions/0008-module-folder-naming.md`)
-- [ ] Mobil/veb frontend seçimini müəyyənləşdir
+- [x] Mobil/veb frontend seçimini müəyyənləşdir (bax `financeos-web/docs/decisions/0001-frontend-foundation.md`, backend-ə toxunan CORS addımı üçün `docs/decisions/0014-cors-for-web-client.md`)
 - [x] Identity & Access-i tətbiq et (bax `docs/decisions/0009-identity-auth-strategy.md`)
 - [x] Accounts + Ledger-i birgə tətbiq et (minimal Categories + Currency & FX daxil, bax `docs/decisions/0010-ledger-command-layer.md`)
 - [ ] Parol sıfırlama axını — **bloklanıb**: email göndərmə üçün provider (SMTP/SendGrid və s.) + credential lazımdır, istifadəçidən təmin edilməlidir
@@ -36,11 +36,13 @@ Bu fayl status lövhəsidir, changelog deyil (dəyişikliklərin tarixçəsi ü�
 - [x] Goals-u tətbiq et (statik hədəf məbləği)
 - [ ] Goals: xatırlatma/bildiriş trigger-ləri (gələcək)
 - [ ] AI Assistant client-i tətbiq et (mövcud command-ları çağıran chat client)
+- [x] Veb frontend (`C:\Projects\financeos-web`, ayrı repo, Next.js) Slice 1 — auth (register/login/logout) + Dashboard (net worth) + Accounts (list/open/archive), bax `financeos-web/docs/PROGRESS.md`. Ledger/Categories/Budget/Goals/Settings səhifələri həmin repo-da növbəti slice-lərdə
 
 ## Log
 
 *(ən yenisi əvvəldə — sessiya/qərar başına bir sətir, aidiyyatı olan ADR-ə keçid ver)*
 
+- Veb frontend üçün stack/repo/auth qərarı verildi: Next.js, ayrıca repo (`financeos-web`), Bearer token (bax `financeos-web/docs/decisions/0001-frontend-foundation.md`). Backend-də tək dəyişiklik: `app.enableCors()` (`src/main.ts`) — yeni client tipi qoşulur, endpoint/auth məntiqi dəyişmir (bax `docs/decisions/0014-cors-for-web-client.md`). Frontend scaffold-u və Slice 1 (auth+dashboard+accounts) `financeos-web` repo-sunda gedir.
 - Hesab deaktivasiyası/data silinməsi və balans reconciliation tətbiq olundu: `POST /auth/deactivate` (parol təsdiqi, bütün sessiyaları ləğv edir, login-i bloklayır), `POST /auth/delete-data` (parol təsdiqi, bütün user-scoped sətirləri — `events` daxil — geri dönməz silir, ADR-0001-in "events silinmir" qaydasını GDPR üçün bilərəkdən pozur), `POST /ledger/reconcile` (`account_balances`-i `ledger_entries`-dən yenidən hesablayır, event yaratmır). Parol sıfırlama və FX cron xarici provider/API açarı tələb etdiyi üçün bloklanmış olaraq qalır (bax `docs/decisions/0013-account-deactivation-and-reconciliation.md`). 39 e2e test (10 fayl) yaşıl.
 - Budget & Rules tətbiq olundu: `GET /budgets/templates` (2 hardcoded — `50/30/20`, `70/20/10`), `POST /budgets`, `GET /budgets`, `GET /budgets/:id`, `GET /budgets/:id/check`, `/priority`, `/deactivate`. `budgets` protected cədvəl — event-sourced (`CreateBudget`/`UpdateBudgetPriority`/`DeactivateBudget`). `percent` dövr gəlirinin faizidir (istifadəçi ilə təsdiqləndi), allocation-lar yalnız expense-kateqoriyalara ola bilər (bax `docs/decisions/0012-budget-rules.md`). 34 e2e test (9 fayl) yaşıl.
 - Goals tətbiq olundu: `POST /goals`, `GET /goals`, `GET /goals/:id`, `/complete`, `/abandon`. `goals` protected cədvəl olduğu üçün (Accounts-dakı kimi) event-sourced — `CreateGoal`/`CompleteGoal`/`AbandonGoal` command-ları. Tərəqqi ayrıca saxlanmır, `linkedAccountId`-in balansı canlı FX kursu ilə `targetCurrency`-ə çevrilərək sorğu zamanı hesablanır (Net Worth-dakı eyni "stok" məntiqi, bax `docs/decisions/0011-net-worth-fx-strategy.md`). 31 e2e test (8 fayl) yaşıl.
