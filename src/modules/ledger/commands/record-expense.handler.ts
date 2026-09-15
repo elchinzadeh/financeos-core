@@ -28,6 +28,15 @@ export class RecordExpenseHandler implements ICommandHandler<RecordExpenseComman
       command.userId,
       command.accountId,
     );
+
+    if (command.externalRef) {
+      const existing = await this.prisma.ledgerEntry.findFirst({
+        where: { accountId: account.id, externalRef: command.externalRef },
+      });
+      if (existing) {
+        return existing;
+      }
+    }
     if (command.categoryId) {
       await this.categoriesService.getAccessibleCategory(
         command.userId,
@@ -68,6 +77,7 @@ export class RecordExpenseHandler implements ICommandHandler<RecordExpenseComman
           fxRateToBase,
           occurredAt,
           note: command.note,
+          externalRef: command.externalRef,
         },
       ],
     });

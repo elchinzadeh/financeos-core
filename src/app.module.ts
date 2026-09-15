@@ -10,6 +10,7 @@ import { CurrencyFxModule } from './modules/currency-fx/currency-fx.module.js';
 import { NetWorthModule } from './modules/net-worth/net-worth.module.js';
 import { BudgetModule } from './modules/budget/budget.module.js';
 import { GoalsModule } from './modules/goals/goals.module.js';
+import { StatementImportModule } from './modules/statement-import/statement-import.module.js';
 
 @Module({
   imports: [
@@ -22,6 +23,7 @@ import { GoalsModule } from './modules/goals/goals.module.js';
     NetWorthModule,
     BudgetModule,
     GoalsModule,
+    StatementImportModule,
   ],
   controllers: [AppController],
   providers: [AppService],

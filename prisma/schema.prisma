@@ -118,12 +118,26 @@ model Category {
   kind     CategoryKind
   icon     String?
 
-  user          User?         @relation(fields: [userId], references: [id])
-  parent        Category?     @relation("CategoryToParent", fields: [parentId], references: [id])
-  children      Category[]    @relation("CategoryToParent")
-  ledgerEntries LedgerEntry[]
+  user            User?                    @relation(fields: [userId], references: [id])
+  parent          Category?                @relation("CategoryToParent", fields: [parentId], references: [id])
+  children        Category[]               @relation("CategoryToParent")
+  ledgerEntries   LedgerEntry[]
+  suggestionRules CategorySuggestionRule[]
 
   @@map("categories")
+}
+
+/// Bank çıxarışı idxalında satıcı adına görə kateqoriya təklifi üçün açar-söz cədvəli
+/// (docs/decisions/0016-bank-statement-import.md). Kod-səviyyəli hardcode deyil, data kimi saxlanılır.
+model CategorySuggestionRule {
+  id         String   @id @default(uuid()) @db.Uuid
+  keyword    String
+  categoryId String   @map("category_id") @db.Uuid
+  createdAt  DateTime @default(now()) @map("created_at")
+
+  category Category @relation(fields: [categoryId], references: [id])
+
+  @@map("category_suggestion_rules")
 }
 
 // --- Currency & FX (docs/MODULES.md §5) ---
@@ -183,11 +197,13 @@ model LedgerEntry {
   fxRateToBase       Decimal        @map("fx_rate_to_base") @db.Decimal(18, 8)
   occurredAt         DateTime       @map("occurred_at")
   note               String?
+  externalRef        String?        @map("external_ref")
 
   event    Event     @relation(fields: [eventId], references: [id])
   account  Account   @relation(fields: [accountId], references: [id])
   category Category? @relation(fields: [categoryId], references: [id])
 
+  @@unique([accountId, externalRef])
   @@map("ledger_entries")
 }
 

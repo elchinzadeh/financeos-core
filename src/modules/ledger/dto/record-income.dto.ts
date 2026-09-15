@@ -24,4 +24,13 @@ export class RecordIncomeDto {
   @IsOptional()
   @IsString()
   note?: string;
+
+  @ApiProperty({
+    required: false,
+    description:
+      'İdempotency açarı (məs. bank idxalı fingerprint-i). Eyni accountId+externalRef ilə təkrar sorğu yeni sətir yaratmır, mövcud olanı qaytarır.',
+  })
+  @IsOptional()
+  @IsString()
+  externalRef?: string;
 }

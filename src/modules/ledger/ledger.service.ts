@@ -28,6 +28,7 @@ export class LedgerService {
         dto.categoryId,
         dto.occurredAt,
         dto.note,
+        dto.externalRef,
       ),
     );
   }
@@ -42,6 +43,7 @@ export class LedgerService {
         dto.categoryId,
         dto.occurredAt,
         dto.note,
+        dto.externalRef,
       ),
     );
   }

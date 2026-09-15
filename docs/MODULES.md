@@ -75,7 +75,7 @@ accounts (
 
 ## 3. Ledger (əsas mühərrik)
 
-**Asılıdır:** Accounts, Categories, Currency & FX · **Ondan asılıdır:** Net Worth, Budget, Goals, Audit
+**Asılıdır:** Accounts, Categories, Currency & FX · **Ondan asılıdır:** Net Worth, Budget, Goals, Audit, Statement Import
 
 **Funksiyalar:**
 - Command-ları qəbul edir: `recordIncome`, `recordExpense`, `transferBetweenAccounts`, `adjustBalance`
@@ -109,7 +109,8 @@ ledger_entries (
   currency char(3),
   fx_rate_to_base numeric,     -- yaradıldığı andakı kurs, dəyişməz
   occurred_at timestamptz,
-  note text
+  note text,
+  external_ref text NULL       -- idempotency açarı, bax docs/decisions/0015-ledger-idempotent-writes.md
 )
 
 account_balances (
@@ -123,7 +124,7 @@ account_balances (
 
 ## 4. Categories
 
-**Asılıdır:** — · **Ondan asılıdır:** Ledger, Budget, Net Worth
+**Asılıdır:** — · **Ondan asılıdır:** Ledger, Budget, Net Worth, Statement Import
 
 **Funksiyalar:**
 - Kateqoriya CRUD, iyerarxik (parent/child)
@@ -140,6 +141,13 @@ categories (
   name text,
   kind enum('income','expense'),
   icon text
+)
+
+category_suggestion_rules (      -- bax docs/decisions/0016-bank-statement-import.md
+  id uuid PK,
+  keyword text,
+  category_id uuid FK -> categories,
+  created_at timestamptz
 )
 ```
 
@@ -248,9 +256,23 @@ Ayrıca modul deyil — `clients` cədvəlində `type='ai_chat'` olan bir client
 
 ---
 
+## 10. Statement Import (bank çıxarışı idxalı)
+
+**Asılıdır:** Accounts, Categories, Ledger (`recordIncome`/`recordExpense` command-ları vasitəsilə yazır) · **Ondan asılıdır:** —
+
+**Funksiyalar:**
+- Bank çıxarışı faylını (hazırda CSV, bank-spesifik "profil" ilə) parse edir
+- İdxaldan əvvəl önizləmə: istiqamət, kateqoriya təklifi, dublikat/balans-uyğunsuzluq bayraqları — DB-yə yazmır
+- Təsdiqlənmiş sətirləri mövcud Ledger command-larına göndərir (`externalRef` ilə idempotent)
+- Bankın daxili cib/xəzinə hərəkətlərini (real gəlir/xərc olmayan) xüsusi kateqoriyaya yönləndirir
+
+Öz cədvəli yoxdur (Ledger-in `external_ref`-i və Categories-in `category_suggestion_rules`-u istifadə edir). Bax `docs/decisions/0016-bank-statement-import.md`.
+
+---
+
 ## MVP-də "skeleton" saxlanan modullar
 
 - **Debt/Credit** → `accounts.type='loan'` kimi indi dəstəklənir, ayrıca modul v2-də
-- **Integration Gateway** (bank/fintech/MCP) → command layer hazır olduğu üçün bunlar sonra `clients` cədvəlinə yeni tip kimi qoşulur
+- **Integration Gateway** (canlı bank/fintech API sync — Plaid/Salt Edge, MCP) → command layer hazır olduğu üçün bunlar sonra `clients` cədvəlinə yeni tip kimi qoşulur. **Fayl-əsaslı (CSV) çıxarış idxalı bunun bir hissəsi kimi artıq tətbiq olunub** — bax §10 Statement Import, `docs/decisions/0016-bank-statement-import.md`.
 
 Ətraflı: `docs/decisions/0003-mvp-scope.md`

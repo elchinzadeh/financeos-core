@@ -21,5 +21,6 @@ import { LedgerService } from './ledger.service.js';
     TransferBetweenAccountsHandler,
     AdjustBalanceHandler,
   ],
+  exports: [LedgerService],
 })
 export class LedgerModule {}

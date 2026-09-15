@@ -7,5 +7,6 @@ export class RecordIncomeCommand {
     public readonly categoryId: string | undefined,
     public readonly occurredAt: string | undefined,
     public readonly note: string | undefined,
+    public readonly externalRef: string | undefined,
   ) {}
 }

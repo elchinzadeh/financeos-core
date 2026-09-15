@@ -15,6 +15,7 @@ Bu fayl status lövhəsidir, changelog deyil (dəyişikliklərin tarixçəsi ü�
 | Budget & Rules (yalnız şablonlar) | Tətbiq olundu | Event-sourced, `percent` = dövr gəlirinin faizi, `GET /budgets/:id/check` limit aşımını aşkarlayır (bax `docs/decisions/0012-budget-rules.md`) |
 | Goals (statik məbləğ) | Tətbiq olundu | Event-sourced (`CreateGoal`/`CompleteGoal`/`AbandonGoal`), tərəqqi `linkedAccountId`-in balansından canlı FX ilə hesablanır |
 | AI Assistant (chat client) | Başlanmayıb | |
+| Statement Import (bank çıxarışı idxalı) | Tətbiq olundu (Phase 1 — backend, Leobank CSV) | `POST /statement-import/{preview,commit}`, real Leobank datası ilə doğrulandı (bax `docs/decisions/0016-bank-statement-import.md`). Frontend UI hələ yoxdur |
 
 ## Növbəti addımlar
 
@@ -36,12 +37,17 @@ Bu fayl status lövhəsidir, changelog deyil (dəyişikliklərin tarixçəsi ü�
 - [x] Goals-u tətbiq et (statik hədəf məbləği)
 - [ ] Goals: xatırlatma/bildiriş trigger-ləri (gələcək)
 - [ ] AI Assistant client-i tətbiq et (mövcud command-ları çağıran chat client)
-- [x] Veb frontend (`C:\Projects\financeos-web`, ayrı repo, Next.js) Slice 1 — auth (register/login/logout) + Dashboard (net worth) + Accounts (list/open/archive), bax `financeos-web/docs/PROGRESS.md`. Ledger/Categories/Budget/Goals/Settings səhifələri həmin repo-da növbəti slice-lərdə
+- [x] Veb frontend (`C:\Projects\financeos-web`, ayrı repo, Next.js) — planlaşdırılmış bütün 6 slice (auth, ledger, categories, budget, goals, settings) tətbiq olunub, bax `financeos-web/docs/PROGRESS.md`
+- [x] Bank çıxarışı idxalı, Phase 1 (backend, Leobank CSV) — bax `docs/decisions/0015-ledger-idempotent-writes.md`, `docs/decisions/0016-bank-statement-import.md`
+- [ ] Bank çıxarışı idxalı, Phase 2 (frontend UI — fayl yükləmə/review ekranı, `financeos-web`-də)
+- [ ] Bank çıxarışı idxalı: XLS dəstəyi (indi yalnız CSV, nümunə verilməyib)
+- [ ] Digər bank profilləri (indi yalnız Leobank)
 
 ## Log
 
 *(ən yenisi əvvəldə — sessiya/qərar başına bir sətir, aidiyyatı olan ADR-ə keçid ver)*
 
+- Bank çıxarışı idxalı Phase 1 (backend) tətbiq olundu: yeni `src/modules/statement-import/` modulu — `POST /statement-import/preview` (DB-yə yazmadan parse edir, kateqoriya təklif edir, dublikat/balans-zənciri uyğunsuzluğunu bayraqlayır) və `POST /statement-import/commit` (mövcud `LedgerService.recordIncome`/`recordExpense`-ə göndərir). İlk bank profili: Leobank CSV (`bank-profiles/leobank.profile.ts`, `csv-parse`). Buna paralel Ledger-ə idempotent yazma dəstəyi əlavə olundu (`ledger_entries.external_ref`, `@@unique([accountId, externalRef])`, bax `docs/decisions/0015-ledger-idempotent-writes.md`) və yeni `category_suggestion_rules` cədvəli (data-əsaslı kateqoriya təklifi, kodda hardcode olunmayıb, bax `docs/decisions/0016-bank-statement-import.md`). Leobank-ın daxili "Xəzinə/Savings" cib hərəkətləri iki yeni sistem kateqoriyasına ("Daxili köçürmə", expense+income) avtomatik yönləndirilir. `prisma/seed.ts`-ə 2 yeni kateqoriya + 21 açar-söz qaydası əlavə olundu. 4 yeni e2e test (`test/statement-import.e2e-spec.ts`) — cəmi 43 test (11 fayl) yaşıl. İstifadəçinin verdiyi real Leobank CSV nümunəsi (62 sətir) ilə əlavə olaraq canlı server smoke test edildi: bütün sətirlər düzgün parse olundu, balans-zənciri yoxlaması sıfır uyğunsuzluq tapdı, kateqoriya təklifləri və daxili-köçürmə aşkarlanması gözlənildiyi kimi işlədi, commit+idempotent təkrar-commit təsdiqləndi. Bu, yalnız backend-dir (Phase 1) — frontend UI (`financeos-web`) ayrıca ediləcək.
 - Veb frontend üçün stack/repo/auth qərarı verildi: Next.js, ayrıca repo (`financeos-web`), Bearer token (bax `financeos-web/docs/decisions/0001-frontend-foundation.md`). Backend-də tək dəyişiklik: `app.enableCors()` (`src/main.ts`) — yeni client tipi qoşulur, endpoint/auth məntiqi dəyişmir (bax `docs/decisions/0014-cors-for-web-client.md`). Frontend scaffold-u və Slice 1 (auth+dashboard+accounts) `financeos-web` repo-sunda gedir.
 - Hesab deaktivasiyası/data silinməsi və balans reconciliation tətbiq olundu: `POST /auth/deactivate` (parol təsdiqi, bütün sessiyaları ləğv edir, login-i bloklayır), `POST /auth/delete-data` (parol təsdiqi, bütün user-scoped sətirləri — `events` daxil — geri dönməz silir, ADR-0001-in "events silinmir" qaydasını GDPR üçün bilərəkdən pozur), `POST /ledger/reconcile` (`account_balances`-i `ledger_entries`-dən yenidən hesablayır, event yaratmır). Parol sıfırlama və FX cron xarici provider/API açarı tələb etdiyi üçün bloklanmış olaraq qalır (bax `docs/decisions/0013-account-deactivation-and-reconciliation.md`). 39 e2e test (10 fayl) yaşıl.
 - Budget & Rules tətbiq olundu: `GET /budgets/templates` (2 hardcoded — `50/30/20`, `70/20/10`), `POST /budgets`, `GET /budgets`, `GET /budgets/:id`, `GET /budgets/:id/check`, `/priority`, `/deactivate`. `budgets` protected cədvəl — event-sourced (`CreateBudget`/`UpdateBudgetPriority`/`DeactivateBudget`). `percent` dövr gəlirinin faizidir (istifadəçi ilə təsdiqləndi), allocation-lar yalnız expense-kateqoriyalara ola bilər (bax `docs/decisions/0012-budget-rules.md`). 34 e2e test (9 fayl) yaşıl.

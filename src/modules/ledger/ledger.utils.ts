@@ -11,6 +11,7 @@ export interface LedgerWriteEntry {
   fxRateToBase: Prisma.Decimal;
   occurredAt: Date;
   note?: string | null;
+  externalRef?: string | null;
 }
 
 export interface WriteLedgerEventParams {
@@ -54,6 +55,7 @@ export async function writeLedgerEvent(prisma: PrismaService, params: WriteLedge
           fxRateToBase: entry.fxRateToBase,
           occurredAt: entry.occurredAt,
           note: entry.note ?? undefined,
+          externalRef: entry.externalRef ?? undefined,
         },
       });
       entries.push(created);
