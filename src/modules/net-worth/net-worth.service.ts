@@ -93,6 +93,7 @@ export class NetWorthService {
       where: {
         account: { userId },
         occurredAt: { gte: from, lte: to },
+        archivedAt: null,
         ...(kind ? { category: { kind } } : {}),
       },
       include: { category: true },
@@ -132,11 +133,11 @@ export class NetWorthService {
   private async balanceAsOf(accountId: string, asOf: Date): Promise<Prisma.Decimal> {
     const [creditSum, debitSum] = await Promise.all([
       this.prisma.ledgerEntry.aggregate({
-        where: { accountId, direction: 'credit', occurredAt: { lte: asOf } },
+        where: { accountId, direction: 'credit', occurredAt: { lte: asOf }, archivedAt: null },
         _sum: { amount: true },
       }),
       this.prisma.ledgerEntry.aggregate({
-        where: { accountId, direction: 'debit', occurredAt: { lte: asOf } },
+        where: { accountId, direction: 'debit', occurredAt: { lte: asOf }, archivedAt: null },
         _sum: { amount: true },
       }),
     ]);

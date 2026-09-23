@@ -73,9 +73,7 @@ describe('Ledger (e2e)', () => {
       .get('/categories')
       .set('Authorization', auth())
       .expect(200);
-    const incomeCategory = categories.body.find(
-      (c: { kind: string; userId: null }) => c.kind === 'income' && c.userId === null,
-    );
+    const incomeCategory = categories.body.find((c: { kind: string }) => c.kind === 'income');
 
     await request(app.getHttpServer())
       .post('/ledger/record-expense')

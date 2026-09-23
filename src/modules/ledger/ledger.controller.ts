@@ -49,8 +49,12 @@ export class LedgerController {
   @Get('entries')
   @ApiOperation({ summary: 'Ledger sətirlərinin siyahısı (istəyə görə hesaba görə filtr)' })
   @ApiResponse({ status: HttpStatus.OK, type: [LedgerEntryResponseDto] })
-  async listEntries(@Req() request: AuthenticatedRequest, @Query('accountId') accountId?: string) {
-    return this.ledgerService.listEntries(request.user.id, accountId);
+  async listEntries(
+    @Req() request: AuthenticatedRequest,
+    @Query('accountId') accountId?: string,
+    @Query('includeArchived') includeArchived?: string,
+  ) {
+    return this.ledgerService.listEntries(request.user.id, accountId, includeArchived === 'true');
   }
 
   @Post('reconcile')

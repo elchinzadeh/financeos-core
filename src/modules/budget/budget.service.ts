@@ -130,6 +130,7 @@ export class BudgetService {
         account: { userId },
         direction,
         occurredAt: { gte: from, lte: to },
+        archivedAt: null,
         ...(categoryId ? { categoryId } : {}),
       },
     });

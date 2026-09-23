@@ -49,9 +49,7 @@ describe('Budget & Rules (e2e)', () => {
       .get('/categories')
       .set('Authorization', auth())
       .expect(200);
-    const incomeCategory = categories.body.find(
-      (c: { kind: string; userId: null }) => c.kind === 'income' && c.userId === null,
-    );
+    const incomeCategory = categories.body.find((c: { kind: string }) => c.kind === 'income');
 
     await request(app.getHttpServer())
       .post('/budgets')
@@ -78,12 +76,8 @@ describe('Budget & Rules (e2e)', () => {
       .get('/categories')
       .set('Authorization', auth())
       .expect(200);
-    const food = categories.body.find(
-      (c: { name: string; userId: null }) => c.name === 'Yemək' && c.userId === null,
-    );
-    const transport = categories.body.find(
-      (c: { name: string; userId: null }) => c.name === 'Nəqliyyat' && c.userId === null,
-    );
+    const food = categories.body.find((c: { name: string }) => c.name === 'Yemək');
+    const transport = categories.body.find((c: { name: string }) => c.name === 'Nəqliyyat');
 
     const budget = await request(app.getHttpServer())
       .post('/budgets')

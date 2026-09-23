@@ -68,9 +68,13 @@ export class LedgerService {
     );
   }
 
-  async listEntries(userId: string, accountId?: string) {
+  async listEntries(userId: string, accountId?: string, includeArchived = false) {
     return this.prisma.ledgerEntry.findMany({
-      where: { account: { userId }, ...(accountId ? { accountId } : {}) },
+      where: {
+        account: { userId },
+        ...(accountId ? { accountId } : {}),
+        ...(includeArchived ? {} : { archivedAt: null }),
+      },
       orderBy: { occurredAt: 'desc' },
     });
   }
@@ -89,11 +93,11 @@ export class LedgerService {
     for (const account of accounts) {
       const [creditSum, debitSum] = await Promise.all([
         this.prisma.ledgerEntry.aggregate({
-          where: { accountId: account.id, direction: 'credit' },
+          where: { accountId: account.id, direction: 'credit', archivedAt: null },
           _sum: { amount: true },
         }),
         this.prisma.ledgerEntry.aggregate({
-          where: { accountId: account.id, direction: 'debit' },
+          where: { accountId: account.id, direction: 'debit', archivedAt: null },
           _sum: { amount: true },
         }),
       ]);

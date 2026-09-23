@@ -31,12 +31,13 @@ model User {
   createdAt     DateTime  @default(now()) @map("created_at")
   deactivatedAt DateTime? @map("deactivated_at")
 
-  clients    Client[]
-  accounts   Account[]
-  categories Category[]
-  events     Event[]
-  goals      Goal[]
-  budgets    Budget[]
+  clients                 Client[]
+  accounts                Account[]
+  categories              Category[]
+  categorySuggestionRules CategorySuggestionRule[]
+  events                  Event[]
+  goals                   Goal[]
+  budgets                 Budget[]
 
   @@map("users")
 }
@@ -131,10 +132,12 @@ model Category {
 /// (docs/decisions/0016-bank-statement-import.md). Kod-səviyyəli hardcode deyil, data kimi saxlanılır.
 model CategorySuggestionRule {
   id         String   @id @default(uuid()) @db.Uuid
+  userId     String?  @map("user_id") @db.Uuid
   keyword    String
   categoryId String   @map("category_id") @db.Uuid
   createdAt  DateTime @default(now()) @map("created_at")
 
+  user     User?    @relation(fields: [userId], references: [id])
   category Category @relation(fields: [categoryId], references: [id])
 
   @@map("category_suggestion_rules")
@@ -198,6 +201,7 @@ model LedgerEntry {
   occurredAt         DateTime       @map("occurred_at")
   note               String?
   externalRef        String?        @map("external_ref")
+  archivedAt         DateTime?      @map("archived_at")
 
   event    Event     @relation(fields: [eventId], references: [id])
   account  Account   @relation(fields: [accountId], references: [id])

@@ -56,6 +56,7 @@ export async function cleanupTestUser(prisma: PrismaService, email: string): Pro
   await prisma.goal.deleteMany({ where: { userId: user.id } });
   await prisma.event.deleteMany({ where: { userId: user.id } });
   await prisma.account.deleteMany({ where: { userId: user.id } });
+  await prisma.categorySuggestionRule.deleteMany({ where: { userId: user.id } });
   await prisma.category.deleteMany({ where: { userId: user.id } });
 
   const clients = await prisma.client.findMany({ where: { userId: user.id } });

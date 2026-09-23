@@ -53,12 +53,8 @@ describe('Net Worth & Reporting (e2e)', () => {
       .get('/categories')
       .set('Authorization', auth())
       .expect(200);
-    const expenseCategory = categories.body.find(
-      (c: { kind: string; userId: null }) => c.kind === 'expense' && c.userId === null,
-    );
-    const incomeCategory = categories.body.find(
-      (c: { kind: string; userId: null }) => c.kind === 'income' && c.userId === null,
-    );
+    const expenseCategory = categories.body.find((c: { kind: string }) => c.kind === 'expense');
+    const incomeCategory = categories.body.find((c: { kind: string }) => c.kind === 'income');
 
     await request(app.getHttpServer())
       .post('/ledger/record-income')

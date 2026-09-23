@@ -36,9 +36,12 @@ export class StatementImportService {
     });
     const existingRefs = new Set(existing.map((e) => e.externalRef));
 
-    const rules = await this.prisma.categorySuggestionRule.findMany({ include: { category: true } });
+    const rules = await this.prisma.categorySuggestionRule.findMany({
+      where: { userId },
+      include: { category: true },
+    });
     const internalCategories = await this.prisma.category.findMany({
-      where: { userId: null, name: INTERNAL_TRANSFER_CATEGORY_NAME },
+      where: { userId, name: INTERNAL_TRANSFER_CATEGORY_NAME },
     });
     const internalExpenseCategoryId = internalCategories.find((c) => c.kind === 'expense')?.id ?? null;
     const internalIncomeCategoryId = internalCategories.find((c) => c.kind === 'income')?.id ?? null;
@@ -128,6 +131,10 @@ export class StatementImportService {
         });
       }
 
+      if (row.categoryId && row.saveRuleKeyword) {
+        await this.saveLearnedRule(userId, row.saveRuleKeyword, row.categoryId);
+      }
+
       if (alreadyExists) {
         skippedDuplicates++;
       } else {
@@ -136,6 +143,20 @@ export class StatementImportService {
     }
 
     return { imported, skippedDuplicates, excluded };
+  }
+
+  private async saveLearnedRule(userId: string, rawKeyword: string, categoryId: string): Promise<void> {
+    const keyword = rawKeyword.trim();
+    if (!keyword) return;
+
+    const existing = await this.prisma.categorySuggestionRule.findFirst({
+      where: { userId, keyword: { equals: keyword, mode: 'insensitive' } },
+    });
+    if (existing) return;
+
+    await this.prisma.categorySuggestionRule.create({
+      data: { userId, keyword, categoryId },
+    });
   }
 
   private fingerprint(

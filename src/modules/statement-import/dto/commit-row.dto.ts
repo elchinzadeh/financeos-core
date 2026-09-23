@@ -31,4 +31,13 @@ export class CommitRowDto {
   @ApiProperty({ description: 'false = bu sətir idxal edilmir (dublikat/istəyə görə çıxarılıb)' })
   @IsBoolean()
   include!: boolean;
+
+  @ApiProperty({
+    required: false,
+    description:
+      'Verilibsə, bu açar-söz + categoryId istifadəçiyə məxsus yeni CategorySuggestionRule kimi saxlanılır (gələcək idxallarda avtomatik təklif üçün)',
+  })
+  @IsOptional()
+  @IsString()
+  saveRuleKeyword?: string;
 }

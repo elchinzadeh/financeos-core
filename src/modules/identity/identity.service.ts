@@ -2,6 +2,10 @@ import { randomBytes, createHash } from 'node:crypto';
 import { ConflictException, Injectable, UnauthorizedException } from '@nestjs/common';
 import * as bcrypt from 'bcryptjs';
 import { PrismaService } from '../../prisma/prisma.service.js';
+import {
+  DEFAULT_CATEGORIES,
+  DEFAULT_CATEGORY_SUGGESTION_RULES,
+} from '../categories/default-categories.constants.js';
 import { LoginDto } from './dto/login.dto.js';
 import { RegisterDto } from './dto/register.dto.js';
 import type { AuthenticatedClient, AuthenticatedUser } from './identity.types.js';
@@ -53,6 +57,27 @@ export class IdentityService {
       await tx.session.create({
         data: { clientId: client.id, tokenHash, expiresAt },
       });
+
+      const categoryIdByNameAndKind = new Map<string, string>();
+      for (const defaultCategory of DEFAULT_CATEGORIES) {
+        const category = await tx.category.create({
+          data: {
+            userId: user.id,
+            name: defaultCategory.name,
+            kind: defaultCategory.kind,
+            icon: defaultCategory.icon,
+          },
+        });
+        categoryIdByNameAndKind.set(`${defaultCategory.name}|${defaultCategory.kind}`, category.id);
+      }
+      for (const rule of DEFAULT_CATEGORY_SUGGESTION_RULES) {
+        const categoryId = categoryIdByNameAndKind.get(`${rule.categoryName}|${rule.categoryKind}`);
+        if (!categoryId) continue;
+        await tx.categorySuggestionRule.create({
+          data: { userId: user.id, keyword: rule.keyword, categoryId },
+        });
+      }
+
       return { user, client };
     });
 
@@ -147,6 +172,7 @@ export class IdentityService {
       await tx.budget.deleteMany({ where: { userId } });
       await tx.event.deleteMany({ where: { userId } });
       await tx.account.deleteMany({ where: { userId } });
+      await tx.categorySuggestionRule.deleteMany({ where: { userId } });
       await tx.category.deleteMany({ where: { userId } });
 
       const clients = await tx.client.findMany({ where: { userId } });

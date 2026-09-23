@@ -110,7 +110,8 @@ ledger_entries (
   fx_rate_to_base numeric,     -- yaradıldığı andakı kurs, dəyişməz
   occurred_at timestamptz,
   note text,
-  external_ref text NULL       -- idempotency açarı, bax docs/decisions/0015-ledger-idempotent-writes.md
+  external_ref text NULL,      -- idempotency açarı, bax docs/decisions/0015-ledger-idempotent-writes.md
+  archived_at timestamptz NULL -- dolu = "arxivlənib" (kateqoriya silinəndə strategy=archive), balans/hesabatlardan çıxarılır, bax docs/decisions/0018-per-user-categories.md
 )
 
 account_balances (
@@ -127,8 +128,9 @@ account_balances (
 **Asılıdır:** — · **Ondan asılıdır:** Ledger, Budget, Net Worth, Statement Import
 
 **Funksiyalar:**
-- Kateqoriya CRUD, iyerarxik (parent/child)
-- Yeni istifadəçiyə default kateqoriya seti
+- Kateqoriya CRUD (yaratma/redaktə/silmə), iyerarxik (parent/child) — sistem/qlobal kateqoriya konsepti yoxdur, hər kateqoriya bir istifadəçiyə aiddir (bax `docs/decisions/0018-per-user-categories.md`)
+- Yeni istifadəçi qeydiyyatdan keçəndə ona məxsus nümunə kateqoriya seti + təklif qaydaları avtomatik klonlanır (`IdentityService.register()`, `src/modules/categories/default-categories.constants.ts`)
+- Silmə 4 strategiya dəstəkləyir (əlaqəli ödənişlər üçün): `reassign` (başqa kateqoriyaya köçür), `uncategorize` (kateqoriyasız et), `delete` (ödənişləri sil), `archive` (`ledger_entries.archived_at` ilə gizlət) — `DeleteCategoryCommand`/`Handler`, bir `CategoryDeleted` event-i yazır
 - Kateqoriya üzrə agregasiya (Reporting üçün)
 - AI-nin avtomatik kateqoriyalaşdırma təklifini qəbul/rədd mexanizmi
 
@@ -136,15 +138,16 @@ account_balances (
 ```sql
 categories (
   id uuid PK,
-  user_id uuid FK -> users NULL,   -- NULL = sistem default kateqoriyası
+  user_id uuid FK -> users,        -- həmişə dolu (yeni datada) — sistem/qlobal kateqoriya yoxdur
   parent_id uuid FK -> categories NULL,
   name text,
-  kind enum('income','expense'),
+  kind enum('income','expense'),   -- yaradıldıqdan sonra dəyişdirilə bilməz
   icon text
 )
 
-category_suggestion_rules (      -- bax docs/decisions/0016-bank-statement-import.md
+category_suggestion_rules (      -- bax docs/decisions/0016-bank-statement-import.md, 0017/0018
   id uuid PK,
+  user_id uuid FK -> users,       -- həmişə dolu — hər istifadəçi öz qaydalarını görür
   keyword text,
   category_id uuid FK -> categories,
   created_at timestamptz
@@ -265,8 +268,9 @@ Ayrıca modul deyil — `clients` cədvəlində `type='ai_chat'` olan bir client
 - İdxaldan əvvəl önizləmə: istiqamət, kateqoriya təklifi, dublikat/balans-uyğunsuzluq bayraqları — DB-yə yazmır
 - Təsdiqlənmiş sətirləri mövcud Ledger command-larına göndərir (`externalRef` ilə idempotent)
 - Bankın daxili cib/xəzinə hərəkətlərini (real gəlir/xərc olmayan) xüsusi kateqoriyaya yönləndirir
+- İstifadəçinin commit zamanı seçdiyi kateqoriyanı (istəyə görə) istifadəçiyə məxsus yeni `category_suggestion_rules` sətri kimi yadda saxlayır — gələcək idxallarda avtomatik təklif olunsun deyə
 
-Öz cədvəli yoxdur (Ledger-in `external_ref`-i və Categories-in `category_suggestion_rules`-u istifadə edir). Bax `docs/decisions/0016-bank-statement-import.md`.
+Öz cədvəli yoxdur (Ledger-in `external_ref`-i və Categories-in `category_suggestion_rules`-u istifadə edir, oxuyur və yazır). Bax `docs/decisions/0016-bank-statement-import.md`, `docs/decisions/0017-category-rule-personalization.md`.
 
 ---
 
