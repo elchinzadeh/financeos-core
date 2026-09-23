@@ -1,7 +1,8 @@
-import { Controller, Get, Post, Body, Query, UseGuards, HttpStatus } from '@nestjs/common';
+import { Controller, Get, Post, Body, Query, UseGuards, HttpCode, HttpStatus } from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiResponse, ApiTags } from '@nestjs/swagger';
 import { SessionAuthGuard } from '../identity/guards/session-auth.guard.js';
 import { CurrencyFxService } from './currency-fx.service.js';
+import { FxSyncService } from './fx-sync.service.js';
 import { FxRateResponseDto } from './dto/fx-rate-response.dto.js';
 import { UpsertFxRateDto } from './dto/upsert-fx-rate.dto.js';
 
@@ -10,7 +11,10 @@ import { UpsertFxRateDto } from './dto/upsert-fx-rate.dto.js';
 @UseGuards(SessionAuthGuard)
 @Controller('fx-rates')
 export class CurrencyFxController {
-  constructor(private readonly currencyFxService: CurrencyFxService) {}
+  constructor(
+    private readonly currencyFxService: CurrencyFxService,
+    private readonly fxSyncService: FxSyncService,
+  ) {}
 
   @Post()
   @ApiOperation({ summary: 'Gündəlik kursu əl ilə əlavə et/yenilə' })
@@ -24,5 +28,13 @@ export class CurrencyFxController {
   @ApiResponse({ status: HttpStatus.OK, type: [FxRateResponseDto] })
   async find(@Query('base') base?: string, @Query('quote') quote?: string) {
     return this.currencyFxService.find(base, quote);
+  }
+
+  @Post('sync')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'İstifadədə olan valyutalar üçün frankfurter.dev-dən kursları dərhal sinxronlaşdırır' })
+  async sync(): Promise<{ ok: true }> {
+    await this.fxSyncService.syncDailyRates();
+    return { ok: true };
   }
 }

@@ -171,9 +171,10 @@ category_suggestion_rules (      -- bax docs/decisions/0016-bank-statement-impor
 **Asılıdır:** — · **Ondan asılıdır:** Ledger, Net Worth
 
 **Funksiyalar:**
-- Gündəlik kurs yeniləmə (xarici mənbədən cron ilə)
+- Gündəlik kurs yeniləmə — `FxSyncService` (frankfurter.dev v2-dən, açarsız), hər gün `@Cron` + server açılışında `onModuleInit`, əl ilə tetiklənmə üçün `POST /fx-rates/sync`. Yalnız hazırda istifadədə olan valyutalar (`accounts.currency` ∪ `users.base_currency` ∪ `goals.target_currency`) sinxronlaşdırılır, bax `docs/decisions/0020-fx-daily-sync.md`
+- Əl ilə kurs daxiletmə: `POST /fx-rates`
 - Tarixi kursların saxlanması
-- Konversiya funksiyası (A→B, tarixə görə)
+- Konversiya funksiyası (A→B, tarixə görə) — `CurrencyFxService.getRate()`, düz kurs tapılmasa tərs kursun tərsi
 - İstifadəçinin əsas valyutasının idarəsi
 
 **Cədvəllər:**
@@ -183,7 +184,7 @@ fx_rates (
   quote_currency char(3),
   rate numeric,
   rate_date date,
-  source text,
+  source text,  -- 'manual' (əl ilə) və ya 'frankfurter' (avtomatik sync)
   PRIMARY KEY (base_currency, quote_currency, rate_date)
 )
 ```
