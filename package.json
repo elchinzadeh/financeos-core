@@ -9,7 +9,6 @@
   "engines": {
     "node": "22.x"
   },
-  "packageManager": "pnpm@11.8.0",
   "scripts": {
     "build": "prisma generate && nest build",
     "deploy": "nest deploy",
