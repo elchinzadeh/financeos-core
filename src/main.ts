@@ -1,6 +1,6 @@
 import 'dotenv/config';
 import { NestFactory } from '@nestjs/core';
-import { ValidationPipe } from '@nestjs/common';
+import { Logger, ValidationPipe } from '@nestjs/common';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 import { AppModule } from './app.module.js';
 
@@ -23,7 +23,8 @@ async function bootstrap() {
   const document = SwaggerModule.createDocument(app, config);
   SwaggerModule.setup('api', app, document);
 
-  // Host açıq verilir — konteynerdə (Railway) yalnız loopback-ə bağlanma xarici trafiki bloklayır.
-  await app.listen(process.env.PORT ?? 3000, '0.0.0.0');
+  // '::' dual-stack-dir: Railway-in daxili şəbəkəsi IPv6-dır, '0.0.0.0' isə yalnız IPv4 dinləyir.
+  await app.listen(process.env.PORT ?? 3000, '::');
+  Logger.log(`Dinlənilir: ${await app.getUrl()}`, 'Bootstrap');
 }
 await bootstrap();
