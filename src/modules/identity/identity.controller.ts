@@ -12,9 +12,11 @@ import { ApiBearerAuth, ApiOperation, ApiResponse, ApiTags } from '@nestjs/swagg
 import { CurrentUser } from './decorators/current-user.decorator.js';
 import { AuthResponseDto } from './dto/auth-response.dto.js';
 import { ConfirmPasswordDto } from './dto/confirm-password.dto.js';
+import { ForgotPasswordDto } from './dto/forgot-password.dto.js';
 import { LoginDto } from './dto/login.dto.js';
 import { MeResponseDto } from './dto/me-response.dto.js';
 import { RegisterDto } from './dto/register.dto.js';
+import { ResetPasswordDto } from './dto/reset-password.dto.js';
 import { SessionAuthGuard } from './guards/session-auth.guard.js';
 import { IdentityService } from './identity.service.js';
 import type { AuthenticatedRequest, AuthenticatedUser } from './identity.types.js';
@@ -37,6 +39,22 @@ export class IdentityController {
   @ApiResponse({ status: HttpStatus.OK, type: AuthResponseDto })
   async login(@Body() dto: LoginDto): Promise<AuthResponseDto> {
     return this.identityService.login(dto);
+  }
+
+  @Post('forgot-password')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Parol sıfırlama linki email-ə göndərilir (email mövcud olmasa da 200)' })
+  async forgotPassword(@Body() dto: ForgotPasswordDto): Promise<{ ok: true }> {
+    await this.identityService.forgotPassword(dto.email);
+    return { ok: true };
+  }
+
+  @Post('reset-password')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'forgot-password token-i ilə yeni parol təyin edir' })
+  async resetPassword(@Body() dto: ResetPasswordDto): Promise<{ ok: true }> {
+    await this.identityService.resetPassword(dto.token, dto.password);
+    return { ok: true };
   }
 
   @Post('logout')

@@ -11,7 +11,8 @@ Bu sənəd hər modulun nə etdiyini, hansı cədvəllərə sahib olduğunu və 
 **Asılıdır:** — · **Ondan asılıdır:** bütün modullar
 
 **Funksiyalar:**
-- İstifadəçi qeydiyyatı/login, parol sıfırlama
+- İstifadəçi qeydiyyatı/login
+- Parol sıfırlama (`POST /auth/forgot-password`, `POST /auth/reset-password`) — email-lə (Resend, `src/modules/email/`), bax `docs/decisions/0019-email-infrastructure.md`
 - Session/token idarəetməsi
 - Client qeydiyyatı (mobile, web, ai_chat, api, mcp) və hər birinin scope-u
 - Hər command üçün permission yoxlaması
@@ -43,6 +44,15 @@ sessions (
   client_id uuid FK -> clients,
   token_hash text,
   expires_at timestamptz
+)
+
+password_reset_tokens (   -- bax docs/decisions/0019-email-infrastructure.md
+  id uuid PK,
+  user_id uuid FK -> users ON DELETE CASCADE,
+  token_hash text,
+  expires_at timestamptz,
+  used_at timestamptz NULL,   -- dolu = artıq istifadə olunub (bir-dəfəlik)
+  created_at timestamptz
 )
 ```
 
