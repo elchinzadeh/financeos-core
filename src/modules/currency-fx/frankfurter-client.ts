@@ -11,7 +11,7 @@ export interface FrankfurterRate {
 export class FrankfurterClient {
   async getRates(base: string, quotes: string[]): Promise<FrankfurterRate[]> {
     const url = `https://api.frankfurter.dev/v2/rates?base=${base}&quotes=${quotes.join(',')}`;
-    const res = await fetch(url);
+    const res = await fetch(url, { signal: AbortSignal.timeout(10_000) });
     if (!res.ok) {
       throw new Error(`Frankfurter xətası (base=${base}): ${res.status}`);
     }

@@ -16,8 +16,9 @@ export class FxSyncService implements OnModuleInit {
     private readonly frankfurterClient: FrankfurterClient,
   ) {}
 
-  async onModuleInit(): Promise<void> {
-    await this.syncDailyRates();
+  onModuleInit(): void {
+    // Gözlənilmir: xarici API-nin yavaşlığı tətbiqin qalxmasını bloklamamalıdır.
+    void this.syncDailyRates();
   }
 
   @Cron(CronExpression.EVERY_DAY_AT_6AM)
