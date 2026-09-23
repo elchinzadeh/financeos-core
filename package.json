@@ -10,7 +10,7 @@
     "node": "22.x"
   },
   "scripts": {
-    "build": "prisma generate && nest build",
+    "build": "prisma generate && tsc -p tsconfig.build.json --incremental false",
     "deploy": "nest deploy",
     "format": "prettier --write \"src/**/*.ts\" \"test/**/*.ts\"",
     "start": "nest start",
