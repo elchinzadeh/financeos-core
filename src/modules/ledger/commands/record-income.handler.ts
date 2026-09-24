@@ -38,11 +38,9 @@ export class RecordIncomeHandler implements ICommandHandler<RecordIncomeCommand>
       }
     }
     if (command.categoryId) {
-      await this.categoriesService.getAccessibleCategory(
-        command.userId,
-        command.categoryId,
-        'income',
-      );
+      // Gəlir və ya XƏRC kateqoriyası ola bilər: xərc kateqoriyası ilə credit = geri qaytarma (refund), həmin
+      // kateqoriyanın xərcini azaldır (ADR-0022). Kateqoriya yenə də istifadəçiyə məxsus olmalıdır.
+      await this.categoriesService.getOwnCategory(command.userId, command.categoryId);
     }
 
     const occurredAt = command.occurredAt ? new Date(command.occurredAt) : new Date();

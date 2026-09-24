@@ -78,7 +78,8 @@ export class CategoriesService {
     return category;
   }
 
-  private async getOwnCategory(userId: string, categoryId: string) {
+  /** Cari istifadəçiyə aid kateqoriyanı gətirir, növünə (income/expense) baxmır. */
+  async getOwnCategory(userId: string, categoryId: string) {
     const category = await this.prisma.category.findUnique({ where: { id: categoryId } });
     if (!category || category.userId !== userId) {
       throw new NotFoundException('Kateqoriya tapılmadı');

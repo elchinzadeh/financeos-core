@@ -80,6 +80,7 @@ export class TransferBetweenAccountsHandler
           fxRateToBase: rateFromToBase,
           occurredAt,
           note: command.note,
+          externalRef: command.externalRefs?.from,
         },
         {
           accountId: toAccount.id,
@@ -89,6 +90,7 @@ export class TransferBetweenAccountsHandler
           fxRateToBase: rateToToBase,
           occurredAt,
           note: command.note,
+          externalRef: command.externalRefs?.to,
         },
       ],
     });

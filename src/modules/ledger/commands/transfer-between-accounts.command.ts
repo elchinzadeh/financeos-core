@@ -7,5 +7,7 @@ export class TransferBetweenAccountsCommand {
     public readonly amount: string,
     public readonly occurredAt: string | undefined,
     public readonly note: string | undefined,
+    /** Bank idxalı: hər tərəfin sətrinə `externalRef` (dublikat aşkarlanması üçün). */
+    public readonly externalRefs?: { from?: string; to?: string },
   ) {}
 }

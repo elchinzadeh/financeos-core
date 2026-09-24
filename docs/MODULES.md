@@ -89,6 +89,7 @@ accounts (
 
 **Funksiyalar:**
 - Command-ları qəbul edir: `recordIncome`, `recordExpense`, `transferBetweenAccounts`, `adjustBalance`
+- `recordIncome` istifadəçinin istənilən kateqoriyasını qəbul edir; **xərc kateqoriyası ilə credit = geri qaytarma (refund)** və həmin kateqoriyanın xərcini azaldır (`docs/decisions/0022-import-transfers-and-refunds.md`). Budget `actual`-ı xalis xərcdir, qaytarma gəlir sayılmır
 - Hər command üçün dəyişməz **event** yaradır
 - Event-dən double-entry sətirlərini (`ledger_entries`) generasiya edir
 - Balans hesablayır (agregasiya/cache)
@@ -142,7 +143,8 @@ account_balances (
 - Yeni istifadəçi qeydiyyatdan keçəndə ona məxsus nümunə kateqoriya seti + təklif qaydaları avtomatik klonlanır (`IdentityService.register()`, `src/modules/categories/default-categories.constants.ts`)
 - Silmə 4 strategiya dəstəkləyir (əlaqəli ödənişlər üçün): `reassign` (başqa kateqoriyaya köçür), `uncategorize` (kateqoriyasız et), `delete` (ödənişləri sil), `archive` (`ledger_entries.archived_at` ilə gizlət) — `DeleteCategoryCommand`/`Handler`, bir `CategoryDeleted` event-i yazır
 - Kateqoriya üzrə agregasiya (Reporting üçün)
-- AI-nin avtomatik kateqoriyalaşdırma təklifini qəbul/rədd mexanizmi
+- AI kateqoriya təklifi bank idxalında işləyir (Jev, yalnız istifadəçinin öz kateqoriyalarından seçir; bax §10 və `docs/decisions/0021-jev-ai-suggestions.md`). Qəbul/rədd mexanizmi: təklif idxal icmalında istifadəçi təsdiqinə qədər sadəcə təklifdir; "Gələcək üçün xatırla" qəbul edilmiş təklifi daimi `category_suggestion_rules` qaydasına çevirir
+- Açar söz uyğunlaşdırma məntiqi ortaq saf funksiyadadır: `src/modules/categories/category-rule-matcher.ts` (idxal və assistant istifadə edir), kateqoriyanın tam yol adı `category-path.ts`-dədir
 
 **Cədvəllər:**
 ```sql
@@ -258,15 +260,18 @@ goals (
 
 ## 9. AI Assistant (Command Client)
 
-**Asılıdır:** bütün command-lar · **Ondan asılıdır:** — (sadəcə bir client)
+**Asılıdır:** Accounts, Categories (oxuma), Jev, Claude (ehtiyat); yazma command-larına özü toxunmur · **Ondan asılıdır:** — (sadəcə bir client)
 
-**Funksiyalar:**
-- Təbii dili (mətn/səs) parse edir
-- Uyğun core command-a map edir
-- Qeyri-müəyyən hallarda aydınlaşdırıcı sual verir
-- Sadə büdcə/limit təklifləri generasiya edir
+**Hazırda tətbiq olunan — "sürətli əlavə" (`src/modules/assistant/`):**
+- `POST /assistant/parse-transaction` `{ text }` → gəlir/xərc **təklifi** qaytarır (istiqamət, məbləğ, valyuta, hesab, kateqoriya, `dayOffset`, qeyd, sahə üzrə confidence, `source`, `warnings`). **Heç nə yazmır** — yazma istifadəçi təsdiqindən sonra client-in mövcud `recordIncome`/`recordExpense` çağırışı ilə olur (`events.client_id` həmin client-dir)
+- Kaskad: deterministik parser (`transaction-text.parser.ts`: məbləğ/valyuta/gün/qeyd, LLM-siz) → açar söz qaydası → mətndə hesab adı / tək hesab → **Jev** (istiqamət, hesab, kateqoriya `Choice` sualları) → **Claude Haiku 4.5** ehtiyatı (parser məbləğ tapmayanda, bir neçə məbləğ olanda, Jev uğursuz olanda, istiqamət və ya hesab qeyri-müəyyən qalanda; nəticəsi parser/Jev-i əvəz edir, onlarla qarışdırılmır)
+- Hər provayder best-effort-dur: açar yoxdursa və ya xəta olarsa AI addımı ötürülür. Bax `docs/decisions/0021-jev-ai-suggestions.md`
 
-Ayrıca modul deyil — `clients` cədvəlində `type='ai_chat'` olan bir client-dir, digər client-lər kimi eyni command-ları çağırır. Öz cədvəli yoxdur.
+**Hələ tətbiq olunmayıb (gələcək):**
+- Səs girişi, çox addımlı dialoq (aydınlaşdırıcı suallar), tam chat interfeysi
+- Sadə büdcə/limit təklifləri generasiyası
+
+Ayrıca modul deyil — konseptual olaraq bir client-dir (`clients.type='ai_chat'` gələcək müstəqil chat client-i üçün saxlanılır), amma "sürətli əlavə" web client-in bir xüsusiyyətidir: təsdiq web-də olur, ona görə hadisələr `web` client-i ilə yazılır. Öz cədvəli yoxdur.
 
 ---
 
@@ -277,9 +282,10 @@ Ayrıca modul deyil — `clients` cədvəlində `type='ai_chat'` olan bir client
 **Funksiyalar:**
 - Bank çıxarışı faylını (hazırda CSV, bank-spesifik "profil" ilə) parse edir
 - İdxaldan əvvəl önizləmə: istiqamət, kateqoriya təklifi, dublikat/balans-uyğunsuzluq bayraqları — DB-yə yazmır
-- Təsdiqlənmiş sətirləri mövcud Ledger command-larına göndərir (`externalRef` ilə idempotent)
+- Təsdiqlənmiş sətirləri mövcud Ledger command-larına göndərir (`externalRef` ilə idempotent). Sətir `transferAccountId` ilə **köçürmə** kimi də yazıla bilər (`transferBetweenAccounts`, eyni valyutalı iki hesab; bank sətrinin fingerprint-i idxal hesabının sətrinə yazılır); credit sətrinə xərc kateqoriyası seçmək = geri qaytarma. `commit` sorğu gövdəsi limiti 5 MB, ən çox 5000 sətir (ADR-0022)
 - Bankın daxili cib/xəzinə hərəkətlərini (real gəlir/xərc olmayan) xüsusi kateqoriyaya yönləndirir
 - İstifadəçinin commit zamanı seçdiyi kateqoriyanı (istəyə görə) istifadəçiyə məxsus yeni `category_suggestion_rules` sətri kimi yadda saxlayır — gələcək idxallarda avtomatik təklif olunsun deyə
+- Kateqoriya təklifi kaskadı: daxili köçürmə → istifadəçinin açar söz qaydası → **AI (Jev)** — yalnız qayda tapılmayan və dublikat olmayan sətirlər üçün, `(istiqamət, təsvir)` üzrə qruplaşdırılmış 6-lıq batch-larla bir Jev sorğusunda (ən çox 150 qrup, sətir sayı çox olanlar əvvəl, paralellik 3, retry + ümumi vaxt büdcəsi; bax ADR-0021 pilot bölməsi). Jev yalnız istifadəçinin öz kateqoriyalarından və açıq "heç biri uyğun deyil" variantından seçir, yeni kateqoriya yaratmır. Preview cavabında `suggestionSource` (`rule`/`internal_transfer`/`ai`) və `suggestionConfidence` var
 
 Öz cədvəli yoxdur (Ledger-in `external_ref`-i və Categories-in `category_suggestion_rules`-u istifadə edir, oxuyur və yazır). Bax `docs/decisions/0016-bank-statement-import.md`, `docs/decisions/0017-category-rule-personalization.md`.
 

@@ -131,6 +131,23 @@ describe('Budget & Rules (e2e)', () => {
     expect(Number(transportCheck.actual)).toBeCloseTo(350);
     expect(transportCheck.breached).toBe(true);
 
+    // Geri qaytarma: xərc kateqoriyası ilə gəlir (credit) həmin kateqoriyanın xərcini azaldır, gəlir sayılmır (ADR-0022).
+    await request(app.getHttpServer())
+      .post('/ledger/record-income')
+      .set('Authorization', auth())
+      .send({ accountId, amount: '100.00', categoryId: transport.id })
+      .expect(201);
+    const afterRefund = await request(app.getHttpServer())
+      .get(`/budgets/${budget.body.id}/check`)
+      .set('Authorization', auth())
+      .expect(200);
+    expect(Number(afterRefund.body.totalIncome)).toBeCloseTo(1000);
+    const transportAfter = afterRefund.body.allocations.find(
+      (a: { categoryId: string }) => a.categoryId === transport.id,
+    );
+    expect(Number(transportAfter.actual)).toBeCloseTo(250);
+    expect(transportAfter.breached).toBe(false);
+
     const reprioritized = await request(app.getHttpServer())
       .post(`/budgets/${budget.body.id}/priority`)
       .set('Authorization', auth())

@@ -48,7 +48,12 @@ export class LedgerService {
     );
   }
 
-  async transfer(userId: string, clientId: string, dto: TransferDto) {
+  async transfer(
+    userId: string,
+    clientId: string,
+    dto: TransferDto,
+    externalRefs?: { from?: string; to?: string },
+  ) {
     return this.commandBus.execute(
       new TransferBetweenAccountsCommand(
         userId,
@@ -58,6 +63,7 @@ export class LedgerService {
         dto.amount,
         dto.occurredAt,
         dto.note,
+        externalRefs,
       ),
     );
   }

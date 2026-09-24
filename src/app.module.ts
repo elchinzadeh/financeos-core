@@ -12,6 +12,7 @@ import { NetWorthModule } from './modules/net-worth/net-worth.module.js';
 import { BudgetModule } from './modules/budget/budget.module.js';
 import { GoalsModule } from './modules/goals/goals.module.js';
 import { StatementImportModule } from './modules/statement-import/statement-import.module.js';
+import { AssistantModule } from './modules/assistant/assistant.module.js';
 
 @Module({
   imports: [
@@ -26,6 +27,7 @@ import { StatementImportModule } from './modules/statement-import/statement-impo
     BudgetModule,
     GoalsModule,
     StatementImportModule,
+    AssistantModule,
   ],
   controllers: [AppController],
   providers: [AppService],

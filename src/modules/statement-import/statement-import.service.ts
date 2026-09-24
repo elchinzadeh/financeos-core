@@ -3,12 +3,14 @@ import { BadRequestException, Injectable } from '@nestjs/common';
 import { Prisma } from '../../generated/prisma/client.js';
 import { PrismaService } from '../../prisma/prisma.service.js';
 import { AccountsService } from '../accounts/accounts.service.js';
+import { matchRule } from '../categories/category-rule-matcher.js';
 import { LedgerService } from '../ledger/ledger.service.js';
 import { BANK_PROFILES } from './bank-profiles/bank-profile.registry.js';
+import { AiGroup, aiGroupKey, CategoryAiSuggester } from './category-ai-suggester.js';
 import type { CommitRowDto } from './dto/commit-row.dto.js';
+import { INTERNAL_TRANSFER_CATEGORY_NAME, type SuggestionSource } from './statement-import.constants.js';
 
 const BALANCE_TOLERANCE = new Prisma.Decimal('0.01');
-const INTERNAL_TRANSFER_CATEGORY_NAME = 'Daxili köçürmə';
 
 @Injectable()
 export class StatementImportService {
@@ -16,6 +18,7 @@ export class StatementImportService {
     private readonly prisma: PrismaService,
     private readonly accountsService: AccountsService,
     private readonly ledgerService: LedgerService,
+    private readonly categoryAiSuggester: CategoryAiSuggester,
   ) {}
 
   async preview(userId: string, accountId: string, bankProfileId: string, fileBuffer: Buffer) {
@@ -65,16 +68,14 @@ export class StatementImportService {
       previousBalance = row.balanceAfter;
 
       let suggestedCategoryId: string | null = null;
+      let suggestionSource: SuggestionSource | null = null;
       if (row.isInternalTransfer) {
         suggestedCategoryId = (row.direction === 'debit' ? internalExpenseCategoryId : internalIncomeCategoryId);
+        if (suggestedCategoryId) suggestionSource = 'internal_transfer';
       } else {
         const expectedKind = row.direction === 'debit' ? 'expense' : 'income';
-        const description = row.rawDescription.toLowerCase();
-        const match = rules
-          .filter((r) => r.category.kind === expectedKind)
-          .filter((r) => description.includes(r.keyword.toLowerCase()))
-          .sort((a, b) => b.keyword.length - a.keyword.length)[0];
-        suggestedCategoryId = match?.categoryId ?? null;
+        suggestedCategoryId = matchRule(rules, row.rawDescription, expectedKind)?.categoryId ?? null;
+        if (suggestedCategoryId) suggestionSource = 'rule';
       }
 
       return {
@@ -84,6 +85,8 @@ export class StatementImportService {
         amount: row.amount.toString(),
         direction: row.direction,
         suggestedCategoryId,
+        suggestionSource,
+        suggestionConfidence: null as number | null,
         isInternalTransfer: row.isInternalTransfer,
         isDuplicate,
         balanceMismatch,
@@ -91,11 +94,53 @@ export class StatementImportService {
       };
     });
 
+    await this.applyAiSuggestions(userId, rows);
+
     return { rows, totalRows: rows.length, duplicateCount, balanceMismatchCount };
   }
 
+  /**
+   * Qayda tapılmayan (və daxili köçürmə/dublikat olmayan) sətirləri `(istiqamət, təsvir)` üzrə qruplaşdırıb hər qrup
+   * üçün AI təklifi alır (ADR-0021). AI heç vaxt mövcud qayda/daxili köçürmə təklifini üstələmir və heç nə yazmır.
+   */
+  private async applyAiSuggestions(
+    userId: string,
+    rows: {
+      description: string;
+      amount: string;
+      direction: 'debit' | 'credit';
+      suggestedCategoryId: string | null;
+      suggestionSource: SuggestionSource | null;
+      suggestionConfidence: number | null;
+      isInternalTransfer: boolean;
+      isDuplicate: boolean;
+    }[],
+  ): Promise<void> {
+    const groups = new Map<string, AiGroup>();
+    for (const row of rows) {
+      if (row.suggestedCategoryId || row.isInternalTransfer || row.isDuplicate) continue;
+      const key = aiGroupKey(row.direction, row.description);
+      const group = groups.get(key);
+      if (group) group.rows++;
+      else groups.set(key, { key, description: row.description, amount: row.amount, direction: row.direction, rows: 1 });
+    }
+
+    const suggestions = await this.categoryAiSuggester.suggest(userId, [...groups.values()]);
+    if (suggestions.size === 0) return;
+
+    for (const row of rows) {
+      if (row.suggestedCategoryId) continue;
+      const suggestion = suggestions.get(aiGroupKey(row.direction, row.description));
+      if (!suggestion) continue;
+      row.suggestedCategoryId = suggestion.categoryId;
+      row.suggestionSource = 'ai';
+      row.suggestionConfidence = suggestion.confidence;
+    }
+  }
+
   async commit(userId: string, clientId: string, accountId: string, rows: CommitRowDto[]) {
-    await this.accountsService.getOwnedActiveAccount(userId, accountId);
+    const account = await this.accountsService.getOwnedActiveAccount(userId, accountId);
+    await this.assertTransferRowsValid(userId, account, rows);
 
     let imported = 0;
     let skippedDuplicates = 0;
@@ -110,6 +155,30 @@ export class StatementImportService {
       const alreadyExists = await this.prisma.ledgerEntry.findFirst({
         where: { accountId, externalRef: row.fingerprint },
       });
+
+      if (row.transferAccountId) {
+        // Köçürmə: gəlir/xərc yox, iki hesab arasında transfer (ADR-0022). Dublikat aşkarlanması üçün fingerprint
+        // idxal hesabının sətrinə yazılır.
+        if (alreadyExists) {
+          skippedDuplicates++;
+          continue;
+        }
+        const isDebit = row.direction === 'debit';
+        await this.ledgerService.transfer(
+          userId,
+          clientId,
+          {
+            fromAccountId: isDebit ? accountId : row.transferAccountId,
+            toAccountId: isDebit ? row.transferAccountId : accountId,
+            amount: row.amount,
+            occurredAt: row.occurredAt,
+            note: row.note,
+          },
+          isDebit ? { from: row.fingerprint } : { to: row.fingerprint },
+        );
+        imported++;
+        continue;
+      }
 
       if (row.direction === 'credit') {
         await this.ledgerService.recordIncome(userId, clientId, {
@@ -143,6 +212,35 @@ export class StatementImportService {
     }
 
     return { imported, skippedDuplicates, excluded };
+  }
+
+  /**
+   * Köçürmə kimi işarələnən sətirlərin hesabını əvvəlcədən yoxlayır ki, idxal yarımçıq qalmasın: hesab istifadəçiyə
+   * məxsus və aktiv olmalı, idxal hesabından fərqli və eyni valyutalı olmalıdır (transfer məbləği mənbə hesabın
+   * valyutasındadır, hədəfə kurs ilə çevrilir — bank çıxarışındakı məbləğlə üst-üstə düşməsi üçün eyni valyuta tələb olunur).
+   */
+  private async assertTransferRowsValid(
+    userId: string,
+    account: { id: string; currency: string },
+    rows: CommitRowDto[],
+  ): Promise<void> {
+    const included = rows.filter((row) => row.include);
+    if (included.some((row) => row.transferAccountId && row.categoryId)) {
+      throw new BadRequestException('Köçürmə sətrində kateqoriya seçilə bilməz');
+    }
+
+    const targetIds = new Set(included.flatMap((row) => (row.transferAccountId ? [row.transferAccountId] : [])));
+    for (const targetId of targetIds) {
+      const target = await this.accountsService.getOwnedActiveAccount(userId, targetId);
+      if (target.id === account.id) {
+        throw new BadRequestException('Köçürmə hesabı idxal olunan hesabla eyni ola bilməz');
+      }
+      if (target.currency !== account.currency) {
+        throw new BadRequestException(
+          `Köçürmə yalnız eyni valyutalı hesablar arasında dəstəklənir (${account.currency} ≠ ${target.currency})`,
+        );
+      }
+    }
   }
 
   private async saveLearnedRule(userId: string, rawKeyword: string, categoryId: string): Promise<void> {

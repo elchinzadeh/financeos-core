@@ -92,13 +92,10 @@ export class BudgetService {
       const category = await this.prisma.category.findUniqueOrThrow({
         where: { id: allocation.categoryId },
       });
-      const actual = await this.sumEntries(
-        userId,
-        periodFrom,
-        periodTo,
-        'debit',
-        allocation.categoryId,
-      );
+      // Xərc kateqoriyasına yazılmış credit-lər (geri qaytarma, ADR-0022) həmin kateqoriyanın xərcini azaldır.
+      const spent = await this.sumEntries(userId, periodFrom, periodTo, 'debit', allocation.categoryId);
+      const refunded = await this.sumEntries(userId, periodFrom, periodTo, 'credit', allocation.categoryId);
+      const actual = spent.sub(refunded);
       const limit = totalIncome.mul(allocation.percent).div(100);
       allocationChecks.push({
         categoryId: allocation.categoryId,
@@ -132,6 +129,10 @@ export class BudgetService {
         occurredAt: { gte: from, lte: to },
         archivedAt: null,
         ...(categoryId ? { categoryId } : {}),
+        // Ümumi gəlir hesablananda xərc kateqoriyalı credit-lər (geri qaytarma) gəlir sayılmır.
+        ...(direction === 'credit' && !categoryId
+          ? { OR: [{ categoryId: null }, { category: { kind: { not: 'expense' as const } } }] }
+          : {}),
       },
     });
     return entries.reduce(

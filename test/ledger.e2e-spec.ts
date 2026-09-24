@@ -82,6 +82,39 @@ describe('Ledger (e2e)', () => {
       .expect(400);
   });
 
+  it('records an income with an expense-kind category as a refund that nets against that category', async () => {
+    const accountId = await openAccount('Geri qaytarma', 'cash', 'AZN');
+    const categories = await request(app.getHttpServer())
+      .get('/categories')
+      .set('Authorization', auth())
+      .expect(200);
+    const food = categories.body.find((c: { kind: string; name: string }) => c.kind === 'expense' && c.name === 'Yemək');
+
+    await request(app.getHttpServer())
+      .post('/ledger/record-expense')
+      .set('Authorization', auth())
+      .send({ accountId, amount: '80.00', categoryId: food.id })
+      .expect(201);
+    const refund = await request(app.getHttpServer())
+      .post('/ledger/record-income')
+      .set('Authorization', auth())
+      .send({ accountId, amount: '30.00', categoryId: food.id })
+      .expect(201);
+    expect(refund.body.direction).toBe('credit');
+    expect(refund.body.categoryId).toBe(food.id);
+
+    expect(await getBalance(accountId)).toBeCloseTo(-50);
+
+    const from = new Date(Date.now() - 60 * 60 * 1000).toISOString();
+    const to = new Date(Date.now() + 60 * 60 * 1000).toISOString();
+    const summary = await request(app.getHttpServer())
+      .get(`/net-worth/category-summary?from=${from}&to=${to}`)
+      .set('Authorization', auth())
+      .expect(200);
+    const foodRow = summary.body.find((c: { categoryId: string | null }) => c.categoryId === food.id);
+    expect(Number(foodRow.total)).toBeCloseTo(-50); // 30 refund − 80 xərc: xalis xərc 50
+  });
+
   it('transfers between two same-currency accounts and checks both entries and both balances', async () => {
     const fromId = await openAccount('Transfer mənbə', 'bank', 'AZN');
     const toId = await openAccount('Transfer hədəf', 'bank', 'AZN');
@@ -112,6 +145,9 @@ describe('Ledger (e2e)', () => {
 
   it('transfers across currencies using the inverse-rate fallback', async () => {
     // Yalnız USD->AZN kursu seed edilir; AZN->USD üçün tərs kurs istifadə olunmalıdır.
+    // Test "tərs kurs"-a (AZN→USD birbaşa yoxdur) əsaslanır: dev bazada tətbiq işə düşəndə FX sync-in yazdığı
+    // birbaşa AZN→USD kursları nəticəni dəyişir, ona görə əvvəlcə silinir (növbəti sync bərpa edir).
+    await prisma.fxRate.deleteMany({ where: { baseCurrency: 'AZN', quoteCurrency: 'USD' } });
     await request(app.getHttpServer())
       .post('/fx-rates')
       .set('Authorization', auth())

@@ -1,6 +1,6 @@
 import { ApiProperty } from '@nestjs/swagger';
 import { Type } from 'class-transformer';
-import { ArrayMinSize, IsArray, IsUUID, ValidateNested } from 'class-validator';
+import { ArrayMaxSize, ArrayMinSize, IsArray, IsUUID, ValidateNested } from 'class-validator';
 import { CommitRowDto } from './commit-row.dto.js';
 
 export class CommitRequestDto {
@@ -11,6 +11,7 @@ export class CommitRequestDto {
   @ApiProperty({ type: [CommitRowDto] })
   @IsArray()
   @ArrayMinSize(1)
+  @ArrayMaxSize(5000)
   @ValidateNested({ each: true })
   @Type(() => CommitRowDto)
   rows!: CommitRowDto[];

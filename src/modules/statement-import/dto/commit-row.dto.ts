@@ -28,6 +28,15 @@ export class CommitRowDto {
   @IsString()
   note?: string;
 
+  @ApiProperty({
+    required: false,
+    description:
+      'Verilibsə, sətir gəlir/xərc kimi yox, bu hesabla (eyni valyutada) aralarında köçürmə kimi yazılır: debit → idxal hesabından bu hesaba, credit → bu hesabdan idxal hesabına. categoryId ilə birgə verilə bilməz.',
+  })
+  @IsOptional()
+  @IsUUID()
+  transferAccountId?: string;
+
   @ApiProperty({ description: 'false = bu sətir idxal edilmir (dublikat/istəyə görə çıxarılıb)' })
   @IsBoolean()
   include!: boolean;
